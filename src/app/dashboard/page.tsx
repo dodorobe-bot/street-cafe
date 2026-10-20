@@ -145,7 +145,7 @@ export default function Dashboard() {
   const breakdown = (key: "purchase_intent"|"price_range", values: [string,string][]) => responses.length===0 ? <p className="muted">Belum ada respons.</p> : values.map(([v,label])=>{const n=responses.filter(r=>r[key]===v).length;return <div key={v} style={{marginBottom:14}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><span>{label}</span><span>{n} dari {responses.length}</span></div>{bar(n)}</div>;});
   return <main className="page">
     <header className="topbar"><Link className="brand" href="/">KAFE <span>RADAR</span></Link><div><span className="pill">Dashboard pilot</span> <button className="secondary" onClick={signOut}>Keluar</button></div></header>
-    <section className="hero"><span className="pill">Ringkasan kampanye</span><h1>Halo, {cafeName || "pemilik kafe"}.</h1><p>Pantau minat menu dari respons pelanggan. Minat bukan penjualan terverifikasi—cocokkan dengan transaksi aktual sebelum mengambil keputusan.</p></section>
+    <section className="hero"><span className="pill">Ringkasan kampanye</span><h1>Halo, <span className="hl">{cafeName || "pemilik kafe"}</span>.</h1><p>Pantau minat menu dari respons pelanggan. Minat bukan penjualan terverifikasi—cocokkan dengan transaksi aktual sebelum mengambil keputusan.</p></section>
     <div className="grid" style={{marginBottom:20}}>
       <div className="card"><div className="muted">Total respons</div><div className="stat">{responses.length}</div></div>
       <div className="card"><div className="muted">Menyatakan ingin membeli</div><div className="stat">{intentCount}</div></div>
