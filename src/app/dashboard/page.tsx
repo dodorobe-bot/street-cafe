@@ -8,20 +8,23 @@ import { SOCIAL_PLATFORMS, platformLabel, type SocialLink, type SocialPlatform }
 type Campaign = { id: string; slug: string; title: string; cafe_id: string; is_active: boolean; created_at: string };
 type ResponseRow = { id: string; campaign_id: string; selected_menu: string[]; price_range: string; purchase_intent: string; created_at: string };
 type MenuRow = { name: string; price: string; file: File | null };
+const slugify = (v: string) => v.toLowerCase().trim().replace(/[^a-z0-9-]/g,"-").replace(/-+/g,"-").replace(/^-|-$/g,"");
 export default function Dashboard() {
   const [email,setEmail] = useState("");
   const [password,setPassword] = useState("");
   const [user,setUser] = useState<string|null>(null);
   const [cafeName,setCafeName] = useState("");
-  const [campaignTitle,setCampaignTitle] = useState("Menu Favorit Minggu Ini");
-  const [slug,setSlug] = useState("menu-favorit-ternate");
-  const [menus,setMenus] = useState<MenuRow[]>([{name:"Kopi Susu Gula Aren",price:"22000",file:null},{name:"Matcha Latte",price:"25000",file:null},{name:"Pisang Goreng",price:"18000",file:null}]);
+  const [campaignTitle,setCampaignTitle] = useState("");
+  const [slug,setSlug] = useState("");
+  const [slugEdited,setSlugEdited] = useState(false);
+  const [menus,setMenus] = useState<MenuRow[]>([{name:"",price:"",file:null}]);
   const [campaigns,setCampaigns] = useState<Campaign[]>([]);
   const [cafeId,setCafeId] = useState<string|null>(null);
   const [links,setLinks] = useState<SocialLink[]>([]);
   const [responses,setResponses] = useState<ResponseRow[]>([]);
   const [message,setMessage] = useState("");
   const [busy,setBusy] = useState(false);
+  const [formKey,setFormKey] = useState(0);
   const [qrFor,setQrFor] = useState<string|null>(null);
   const [qrSrc,setQrSrc] = useState<string|null>(null);
   const supabase = getSupabase();
@@ -81,13 +84,15 @@ export default function Dashboard() {
     } else if(cafeName.trim()) {
       await supabase.from("cafes").update({name:cafeName.trim()}).eq("id",cafe.id);
     }
-    const cleanSlug = slug.toLowerCase().trim().replace(/[^a-z0-9-]/g,"-").replace(/-+/g,"-").replace(/^-|-$/g,"");
-    const {data: campaign,error} = await supabase.from("campaigns").insert({cafe_id:cafe.id,title:campaignTitle,slug:cleanSlug,is_active:true}).select("id").single();
+    const filled = menus.filter(m=>m.name.trim());
+    if(!filled.length){setBusy(false);setMessage("Isi minimal satu nama menu.");return;}
+    const cleanSlug = slugify(slug);
+    if(!cleanSlug){setBusy(false);setMessage("Slug tautan kosong. Tulis judul kampanye atau isi slug terlebih dahulu.");return;}
+    const {data: campaign,error} = await supabase.from("campaigns").insert({cafe_id:cafe.id,title:campaignTitle.trim(),slug:cleanSlug,is_active:true}).select("id").single();
     if(error || !campaign){setBusy(false);setMessage(error?.message || "Gagal membuat kampanye.");return;}
     const items: {campaign_id:string; name:string; price:number; photo_path:string|null}[] = [];
     let photoFailures = 0;
-    for (const m of menus) {
-      if (!m.name.trim()) continue;
+    for (const m of filled) {
       let photo_path: string|null = null;
       if (m.file) {
         try { photo_path = await uploadMenuPhoto(supabase, campaign.id, m.file); }
@@ -99,7 +104,7 @@ export default function Dashboard() {
       const {error: menuError} = await supabase.from("menu_items").insert(items);
       if(menuError){setBusy(false);setMessage("Kampanye dibuat, tetapi menu gagal disimpan: "+menuError.message);await refresh();return;}
     }
-    setMenus([]);
+    setMenus([{name:"",price:"",file:null}]);setCampaignTitle("");setSlug("");setSlugEdited(false);setFormKey(k=>k+1);
     setBusy(false);setMessage(photoFailures ? `Kampanye dibuat, tetapi ${photoFailures} foto gagal diunggah.` : "Kampanye berhasil dibuat.");await refresh();
   }
   async function addLink(scope: {cafe_id: string} | {campaign_id: string}, platform: SocialPlatform, url: string) {
@@ -114,6 +119,29 @@ export default function Dashboard() {
     if (!supabase) return;
     const {error} = await supabase.from("social_links").delete().eq("id", id);
     if (error) { setMessage("Tautan gagal dihapus: " + error.message); return; }
+    await refresh();
+  }
+  async function setActive(c: Campaign, on: boolean) {
+    if (!supabase) return;
+    const {error} = await supabase.from("campaigns").update({is_active:on}).eq("id", c.id);
+    if (error) { setMessage("Status kampanye gagal diubah: " + error.message); return; }
+    setMessage(on ? "Kampanye aktif kembali." : "Kampanye dihentikan: tautan dan QR lama tidak lagi menerima respons.");
+    await refresh();
+  }
+  async function removeCampaign(c: Campaign) {
+    if (!supabase) return;
+    if (!window.confirm(`Hapus kampanye "${c.title}" beserta menu, foto, dan seluruh responsnya?`)) return;
+    setBusy(true);
+    const {data: ms} = await supabase.from("menu_items").select("photo_path").eq("campaign_id", c.id).not("photo_path","is",null);
+    const paths = (ms || []).map((m: {photo_path: string}) => m.photo_path);
+    if (paths.length) {
+      const rm = await supabase.storage.from("menu-photos").remove(paths);
+      if (rm.error) setMessage("Kampanye dihapus, tetapi foto gagal dihapus: " + rm.error.message);
+    }
+    const {error} = await supabase.from("campaigns").delete().eq("id", c.id);
+    setBusy(false);
+    if (error) { setMessage("Kampanye gagal dihapus: " + error.message); return; }
+    if (!paths.length) setMessage("Kampanye dihapus.");
     await refresh();
   }
   async function signOut(){if(!supabase)return; await supabase.auth.signOut();setUser(null);setCampaigns([]);setResponses([]);setLinks([]);setCafeId(null);setMessage("Anda sudah keluar.");}
@@ -138,7 +166,7 @@ export default function Dashboard() {
       <form onSubmit={signIn}><label>Email</label><input type="email" value={email} onChange={e=>setEmail(e.target.value)} required/><label>Kata sandi</label><input type="password" value={password} onChange={e=>setPassword(e.target.value)} minLength={6} required/><button disabled={busy} style={{marginTop:18}}>{busy?"Memproses…":"Masuk"}</button></form>
       <p className="muted" style={{fontSize:13}}>Belum punya akun? Isi email dan kata sandi, lalu klik daftar.</p><button className="secondary" disabled={busy} onClick={()=>signUp({preventDefault:()=>{}} as React.FormEvent)}>Daftar akun</button>
       {message && <p className="muted">{message}</p>}</section>
-      <section className="card"><h2>Sebelum digunakan</h2><p className="muted">Buat project Supabase, jalankan <code>supabase/schema.sql</code>, dan isi <code>.env.local</code>. Panduan lengkap ada di README.</p><div className="notice">Jangan masukkan data pribadi pelanggan yang sensitif. Respons pilot hanya menyimpan pilihan menu dan minat beli.</div></section>
+      <section className="card"><h2>Yang perlu Anda tahu</h2><p className="muted">Satu akun untuk satu kafe. Setiap kampanye punya tautan pendek dan QR yang bisa ditempel di meja atau dikirim lewat WhatsApp.</p><div className="notice">Jangan memasukkan data pribadi pelanggan yang sensitif. Respons pilot hanya menyimpan pilihan menu, kisaran harga, dan minat beli.</div></section>
     </div>
   </main>;
   const bar = (n: number) => <div className="bar"><div style={{width:`${Math.min(100,n/Math.max(1,responses.length)*100)}%`}}/></div>;
@@ -151,18 +179,18 @@ export default function Dashboard() {
       <div className="card"><div className="muted">Menyatakan ingin membeli</div><div className="stat">{intentCount}</div></div>
       <div className="card"><div className="muted">Kampanye aktif</div><div className="stat">{campaigns.filter(c=>c.is_active).length}</div></div>
     </div>
-    <section className="card" style={{marginBottom:20}}><h2>Buat kampanye baru</h2><form onSubmit={createCampaign}>
+    <section className="card" style={{marginBottom:20}}><h2>Buat kampanye baru</h2><form key={formKey} onSubmit={createCampaign}>
       <label>Nama kafe</label><input value={cafeName} onChange={e=>setCafeName(e.target.value)} placeholder="Contoh: Kopi Sudut Ternate" required/>
-      <label>Judul kampanye</label><input value={campaignTitle} onChange={e=>setCampaignTitle(e.target.value)} required/>
-      <label>Slug tautan (huruf kecil, angka, tanda hubung)</label><input value={slug} onChange={e=>setSlug(e.target.value)} required/>
+      <label>Judul kampanye</label><input value={campaignTitle} onChange={e=>{setCampaignTitle(e.target.value); if(!slugEdited) setSlug(slugify(e.target.value));}} placeholder="Contoh: Menu Dingin Favorit" required/>
+      <label>Slug tautan (huruf kecil, angka, tanda hubung)</label><input value={slug} onChange={e=>{setSlugEdited(true);setSlug(e.target.value);}} placeholder="menu-dingin-favorit" required/>
       <h3>Menu kampanye</h3>{menus.map((m,i)=><div className="grid" key={i} style={{gridTemplateColumns:"2fr 1fr 1.4fr",marginBottom:8}}><input aria-label={`Nama menu ${i+1}`} value={m.name} onChange={e=>setMenus(old=>old.map((x,j)=>j===i?{...x,name:e.target.value}:x))} placeholder="Nama menu"/><input aria-label={`Harga menu ${i+1}`} type="number" min="0" value={m.price} onChange={e=>setMenus(old=>old.map((x,j)=>j===i?{...x,price:e.target.value}:x))} placeholder="Harga (Rp)"/><input aria-label={`Foto menu ${i+1}`} type="file" accept="image/*" onChange={e=>setMenus(old=>old.map((x,j)=>j===i?{...x,file:e.target.files?.[0]??null}:x))}/></div>)}
       <p className="muted" style={{fontSize:12}}>Foto menu diunggah ke penyimpanan Supabase dan tampil di halaman survei. Video tidak disimpan di aplikasi—tautkan lewat tombol promosi di bawah.</p>
-      <button type="button" className="secondary" onClick={()=>setMenus(old=>[...old,{name:"",price:"0",file:null}])}>+ Tambah menu</button> <button disabled={busy} type="submit">{busy?"Menyimpan…":"Simpan kampanye"}</button>
+      <button type="button" className="secondary" onClick={()=>setMenus(old=>[...old,{name:"",price:"",file:null}])}>+ Tambah menu</button> <button disabled={busy} type="submit">{busy?"Menyimpan…":"Simpan kampanye"}</button>
     </form>{message && <p className="muted">{message}</p>}</section>
     <section className="card" style={{marginBottom:20}}><h2>Tautan promosi kafe</h2><p className="muted">Tautan ini tampil di semua kampanye kafe: Instagram, Facebook, X, TikTok, Threads, WhatsApp, YouTube, atau tautan video Reels/TikTok/YouTube favorit pelanggan.</p>
       {cafeId && <LinkEditor links={links.filter(l=>l.cafe_id===cafeId && !l.campaign_id)} onAdd={(platform,url)=>void addLink({cafe_id:cafeId},platform,url)} onRemove={(id)=>void removeLink(id)}/>}
     </section>
-    <section className="card" style={{marginBottom:20}}><h2>Kampanye Anda</h2>{campaigns.length===0?<p className="muted">Belum ada kampanye. Buat kampanye pertama di atas.</p>:campaigns.map(c=><div key={c.id}><div className="menurow"><div><strong>{c.title}</strong><div className="muted" style={{fontSize:13}}>/{`c/${c.slug}`}</div></div><span className="price">{responses.filter(r=>r.campaign_id===c.id).length} respons</span><Link href={`/c/${c.slug}`}>Buka →</Link><button className="secondary" type="button" onClick={()=>toggleQr(c.slug)}>{qrFor===c.slug?"Tutup QR":"QR & tautan"}</button></div>{qrFor===c.slug && <div style={{display:"flex",gap:18,alignItems:"center",flexWrap:"wrap",padding:"14px 0 18px"}}>{qrSrc?<><Image src={qrSrc} alt={`QR kampanye ${c.title}`} width={180} height={180} unoptimized/><a className="button" href={qrSrc} download={`qr-${c.slug}.png`}>Unduh PNG</a></>:<span className="muted">Membuat QR…</span>}<p className="muted" style={{fontSize:13,maxWidth:340}}>Tempel di meja kafe atau kirim sebagai gambar lewat WhatsApp. Kode ini mengarah ke tautan kampanye, bukan ke dashboard.</p></div>}<div style={{paddingBottom:18}}><h3>Tautan promosi kampanye ini</h3><LinkEditor links={links.filter(l=>l.campaign_id===c.id)} onAdd={(platform,url)=>void addLink({campaign_id:c.id},platform,url)} onRemove={(id)=>void removeLink(id)}/></div></div>)}</section>
+    <section className="card" style={{marginBottom:20}}><h2>Kampanye Anda</h2>{campaigns.length===0?<p className="muted">Belum ada kampanye. Buat kampanye pertama di atas.</p>:campaigns.map(c=><div key={c.id}><div className="menurow" style={c.is_active?undefined:{opacity:.6}}><div><strong>{c.title}</strong>{" "}<span className="pill" style={c.is_active?undefined:{background:"rgba(255,255,255,.08)",borderColor:"var(--line)",color:"var(--muted)"}}>{c.is_active?"Aktif":"Nonaktif"}</span><div className="muted" style={{fontSize:13}}>/c/{c.slug}</div></div><span className="price">{responses.filter(r=>r.campaign_id===c.id).length} respons</span><Link href={`/c/${c.slug}`}>Buka →</Link><button className="secondary" type="button" onClick={()=>toggleQr(c.slug)}>{qrFor===c.slug?"Tutup QR":"QR & tautan"}</button><button className="secondary" type="button" onClick={()=>void setActive(c,!c.is_active)}>{c.is_active?"Hentikan":"Aktifkan"}</button><button className="secondary" type="button" disabled={busy} onClick={()=>void removeCampaign(c)}>Hapus</button></div>{qrFor===c.slug && <div style={{display:"flex",gap:18,alignItems:"center",flexWrap:"wrap",padding:"14px 0 18px"}}>{qrSrc?<><Image src={qrSrc} alt={`QR kampanye ${c.title}`} width={180} height={180} unoptimized/><a className="button" href={qrSrc} download={`qr-${c.slug}.png`}>Unduh PNG</a></>:<span className="muted">Membuat QR…</span>}<p className="muted" style={{fontSize:13,maxWidth:340}}>Tempel di meja kafe atau kirim sebagai gambar lewat WhatsApp. Kode ini mengarah ke tautan kampanye, bukan ke dashboard.</p></div>}<div style={{paddingBottom:18}}><h3>Tautan promosi kampanye ini</h3><LinkEditor links={links.filter(l=>l.campaign_id===c.id)} onAdd={(platform,url)=>void addLink({campaign_id:c.id},platform,url)} onRemove={(id)=>void removeLink(id)}/></div></div>)}</section>
     <section className="card" style={{marginBottom:20}}><h2>Minat beli</h2>{breakdown("purchase_intent",[["yes","Ingin membeli"],["maybe","Mungkin membeli"],["no","Belum berminat"]])}<p className="muted" style={{fontSize:12}}>Pilihan awal formulir adalah mungkin, jadi hitungan cenderung menumpuk di tengah.</p></section>
     <section className="card" style={{marginBottom:20}}><h2>Kisaran harga menurut pelanggan</h2>{breakdown("price_range",[["sesuai","Harga saat ini terasa sesuai"],["lebih_murah","Berharap lebih murah"],["lebih_mahal","Bersedia membayar lebih"],["tidak_tahu","Belum tahu"]])}</section>
     <section className="card"><h2>Menu yang dipilih pelanggan</h2>{responses.length===0?<p className="muted">Belum ada respons.</p>:Array.from(new Set(responses.flatMap(r=>r.selected_menu||[]))).map(name=>{const count=responses.filter(r=>(r.selected_menu||[]).includes(name)).length;return <div key={name} style={{marginBottom:18}}><div style={{display:"flex",justifyContent:"space-between",gap:12}}><strong>{name}</strong><span>{count} pilihan</span></div><div className="bar"><div style={{width:`${Math.min(100,count/Math.max(1,responses.length)*100)}%`}}/></div></div>})}</section>
