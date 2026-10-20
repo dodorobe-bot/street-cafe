@@ -4,8 +4,8 @@ Fondasi aplikasi web untuk pilot awal KAFE RADAR: kampanye menu, respons minat p
 
 ## Isi
 - `src/app/page.tsx` — landing page.
-- `src/app/dashboard/page.tsx` — login/daftar, membuat kampanye, melihat respons.
-- `src/app/c/[slug]/page.tsx` — halaman survei publik untuk pelanggan.
+- `src/app/dashboard/page.tsx` — login/daftar, membuat kampanye (termasuk foto menu), mengatur tautan promosi media sosial, melihat respons.
+- `src/app/c/[slug]/page.tsx` — halaman survei publik untuk pelanggan, menampilkan foto menu dan tombol tautan sosial media.
 - `supabase/schema.sql` — tabel dan kebijakan Row Level Security.
 - `.env.example` — variabel konfigurasi yang diperlukan.
 
@@ -42,9 +42,10 @@ Fondasi aplikasi web untuk pilot awal KAFE RADAR: kampanye menu, respons minat p
 - Ini adalah starter code, bukan aplikasi yang sudah dipasang atau dideploy.
 - Belum ada pembayaran, pencatatan penjualan aktual, atribusi promosi, multi-user per kafe, atau laporan ekspor.
 - Pendaftaran akun memakai Supabase Auth. Untuk pilot, pemilik kafe sebaiknya menggunakan email khusus bisnis.
-- Formulir belum memiliki CAPTCHA/rate limiting. Sebelum dipublikasikan secara luas, tambahkan pembatasan spam dan uji kebijakan database.
+- Anti-spam survei bersifat penghalau (honeypot, jeda waktu, satu respons per perangkat), bukan penolakan berbasis IP. Untuk publikasi luas, pertimbangkan pembatasan di sisi server.
 - Survei mengukur minat, bukan bukti transaksi. Jangan menjanjikan peningkatan penjualan hanya dari hasil survei.
 - Jangan menyimpan data pribadi sensitif pelanggan.
+- Foto menu disimpan di Supabase Storage (bucket `menu-photos`). Video promosi tidak disimpan di aplikasi—pengguna menautkan langsung ke Instagram, TikTok, YouTube, dan sejenisnya.
 
 ## Catatan teknis
 Kode menggunakan Next.js App Router, React, TypeScript, dan Supabase JS. SQL mengaktifkan Row Level Security dan membatasi akses dashboard ke pemilik kampanye. Uji semua kebijakan dalam project Supabase terpisah sebelum menerima data pelanggan sungguhan.
