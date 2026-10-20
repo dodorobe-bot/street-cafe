@@ -45,6 +45,14 @@ create policy "owner reads own cafe" on public.cafes for select to authenticated
 create policy "owner inserts own cafe" on public.cafes for insert to authenticated with check (owner_id = auth.uid());
 create policy "owner updates own cafe" on public.cafes for update to authenticated using (owner_id = auth.uid()) with check (owner_id = auth.uid());
 
+-- Customers opening a campaign link need the cafe name, but must not browse all cafes.
+-- security definer breaks the RLS cycle between cafes and campaigns (each policy would otherwise query the other).
+create or replace function public.has_active_campaign(p_cafe uuid) returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from campaigns cp where cp.cafe_id = p_cafe and cp.is_active = true);
+$$;
+grant execute on function public.has_active_campaign(uuid) to anon, authenticated;
+create policy "public reads cafe of active campaign" on public.cafes for select to anon, authenticated using (public.has_active_campaign(id));
+
 -- Public can read active campaigns; owners can manage campaigns for their cafe.
 create policy "public reads active campaigns" on public.campaigns for select to anon, authenticated using (is_active = true or exists (select 1 from public.cafes c where c.id = cafe_id and c.owner_id = auth.uid()));
 create policy "owner creates campaigns" on public.campaigns for insert to authenticated with check (exists (select 1 from public.cafes c where c.id = cafe_id and c.owner_id = auth.uid()));
