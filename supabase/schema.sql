@@ -73,6 +73,8 @@ create policy "owner deletes campaigns" on public.campaigns for delete to authen
 
 -- Menu items are readable for active campaigns; only the owner can manage them.
 create policy "public reads menu for active campaign" on public.menu_items for select to anon, authenticated using (exists (select 1 from public.campaigns cp where cp.id = campaign_id and cp.is_active = true));
+-- Owners also need to read menus of their inactive campaigns, otherwise the analytics page cannot show menus that got no votes.
+create policy "owner reads menu items" on public.menu_items for select to authenticated using (exists (select 1 from public.campaigns cp join public.cafes c on c.id = cp.cafe_id where cp.id = menu_items.campaign_id and c.owner_id = auth.uid()));
 create policy "owner inserts menu items" on public.menu_items for insert to authenticated with check (exists (select 1 from public.campaigns cp join public.cafes c on c.id = cp.cafe_id where cp.id = campaign_id and c.owner_id = auth.uid()));
 create policy "owner updates menu items" on public.menu_items for update to authenticated using (exists (select 1 from public.campaigns cp join public.cafes c on c.id = cp.cafe_id where cp.id = campaign_id and c.owner_id = auth.uid())) with check (exists (select 1 from public.campaigns cp join public.cafes c on c.id = cp.cafe_id where cp.id = campaign_id and c.owner_id = auth.uid()));
 create policy "owner deletes menu items" on public.menu_items for delete to authenticated using (exists (select 1 from public.campaigns cp join public.cafes c on c.id = cp.cafe_id where cp.id = campaign_id and c.owner_id = auth.uid()));

@@ -5,6 +5,7 @@ Fondasi aplikasi web untuk pilot awal KAFE RADAR: kampanye menu, respons minat p
 ## Isi
 - `src/app/page.tsx` — landing page.
 - `src/app/dashboard/page.tsx` — login/daftar, membuat kampanye (termasuk foto menu), mengatur tautan promosi media sosial, menghentikan/mengaktifkan kembali/menghapus kampanye, membuat QR, dan melihat respons.
+- `src/app/dashboard/kampanye/[slug]/page.tsx` — halaman analitik per kampanye: tren respons harian, peringkat menu dengan % minat beli, dan rekap kisaran harga.
 - `src/app/c/[slug]/page.tsx` — halaman survei publik untuk pelanggan, menampilkan foto menu dan tombol tautan sosial media.
 - `supabase/schema.sql` — tabel dan kebijakan Row Level Security.
 - `.env.example` — variabel konfigurasi yang diperlukan.
@@ -47,6 +48,7 @@ Fondasi aplikasi web untuk pilot awal KAFE RADAR: kampanye menu, respons minat p
 - Jangan menyimpan data pribadi sensitif pelanggan.
 - Foto menu disimpan di Supabase Storage (bucket `menu-photos`). Video promosi tidak disimpan di aplikasi—pengguna menautkan langsung ke Instagram, TikTok, YouTube, dan sejenisnya.
 - Menghapus kampanye ikut menghapus menu, respons, tautan promosi kampanye, dan foto menu di Storage. Kampanye nonaktif tetap menyimpan datanya tetapi menolak respons baru. Baris profil kafe belum bisa dihapus dari dashboard; gunakan SQL Editor bila perlu.
+- Database pilot yang sudah terlanjur berjalan perlu menambahkan policy `owner reads menu items` (lihat `supabase/schema.sql`) agar harga menu tetap tampil di halaman analitik untuk kampanye nonaktif. Blok SQL-nya idempoten dan aman dijalankan ulang.
 
 ## Catatan teknis
 Kode menggunakan Next.js App Router, React, TypeScript, dan Supabase JS. SQL mengaktifkan Row Level Security dan membatasi akses dashboard ke pemilik kampanye. Uji semua kebijakan dalam project Supabase terpisah sebelum menerima data pelanggan sungguhan.
