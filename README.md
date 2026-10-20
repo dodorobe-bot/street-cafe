@@ -1,0 +1,50 @@
+# KAFE RADAR Online — starter MVP
+
+Fondasi aplikasi web untuk pilot awal KAFE RADAR: kampanye menu, respons minat pelanggan, dan dashboard pemilik.
+
+## Isi
+- `src/app/page.tsx` — landing page.
+- `src/app/dashboard/page.tsx` — login/daftar, membuat kampanye, melihat respons.
+- `src/app/c/[slug]/page.tsx` — halaman survei publik untuk pelanggan.
+- `supabase/schema.sql` — tabel dan kebijakan Row Level Security.
+- `.env.example` — variabel konfigurasi yang diperlukan.
+
+## Yang dibutuhkan
+- Node.js 20 atau lebih baru.
+- Akun Supabase.
+- (Opsional untuk publikasi) akun Vercel.
+
+## Menjalankan di komputer
+1. Ekstrak ZIP.
+2. Buat project baru di Supabase.
+3. Buka **SQL Editor** di Supabase, lalu jalankan seluruh isi `supabase/schema.sql`.
+4. Di Supabase, buka **Project Settings → API** dan salin Project URL serta anon/public key.
+5. Salin `.env.example` menjadi `.env.local`, lalu isi:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+6. Buka terminal pada folder proyek, jalankan:
+   ```bash
+   npm install
+   npm run dev
+   ```
+7. Buka `http://localhost:3000`.
+8. Masuk ke dashboard, daftar akun menggunakan email dan kata sandi, lalu buat kampanye.
+9. Bagikan URL kampanye dengan format `http://localhost:3000/c/slug-kampanye` hanya untuk tes di komputer sendiri. Untuk pelanggan nyata, deploy terlebih dahulu.
+
+## Deploy online (ringkas)
+1. Push folder proyek ke repository GitHub.
+2. Import repository tersebut di Vercel.
+3. Tambahkan dua environment variables Supabase yang sama di pengaturan proyek Vercel.
+4. Deploy, lalu tes alur daftar/login, buat kampanye, dan kirim respons menggunakan ponsel lain.
+5. URL kampanye online akan berbentuk `https://domain-anda/c/slug-kampanye`. QR dapat dibuat dari URL tersebut menggunakan generator QR tepercaya.
+
+## Batasan versi awal
+- Ini adalah starter code, bukan aplikasi yang sudah dipasang atau dideploy.
+- Belum ada pembayaran, pencatatan penjualan aktual, atribusi promosi, multi-user per kafe, atau laporan ekspor.
+- Pendaftaran akun memakai Supabase Auth. Untuk pilot, pemilik kafe sebaiknya menggunakan email khusus bisnis.
+- Formulir belum memiliki CAPTCHA/rate limiting. Sebelum dipublikasikan secara luas, tambahkan pembatasan spam dan uji kebijakan database.
+- Survei mengukur minat, bukan bukti transaksi. Jangan menjanjikan peningkatan penjualan hanya dari hasil survei.
+- Jangan menyimpan data pribadi sensitif pelanggan.
+
+## Catatan teknis
+Kode menggunakan Next.js App Router, React, TypeScript, dan Supabase JS. SQL mengaktifkan Row Level Security dan membatasi akses dashboard ke pemilik kampanye. Uji semua kebijakan dalam project Supabase terpisah sebelum menerima data pelanggan sungguhan.
